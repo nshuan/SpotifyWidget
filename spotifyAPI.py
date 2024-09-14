@@ -24,7 +24,7 @@ class SpotifyTrack:
         CLIENT_ID = os.getenv("CLIENT_ID")
         CLIENT_SECRET = os.getenv("CLIENT_SECRET")
         REDIRECT_URI = "http://localhost:8888/callback"
-        SCOPE = "user-modify-playback-state user-read-currently-playing"
+        SCOPE = "user-read-playback-state user-read-currently-playing"
         # SCOPE = "user-library-read"
 
         sp_oauth = SpotifyOAuth(client_id=CLIENT_ID, client_secret=CLIENT_SECRET, redirect_uri=REDIRECT_URI, scope=SCOPE)  
@@ -69,6 +69,8 @@ class SpotifyTrack:
     # Get playing track
     def currently_playing_track(self):
         playing_track = self.spotify.currently_playing()
+        current_playback = self.spotify.current_playback()
+
         if playing_track is None:
             return None
         if playing_track['currently_playing_type'] == 'ad':
@@ -90,13 +92,17 @@ class SpotifyTrack:
         track.progress_in_ms = int(playing_track['progress_ms'])
         track.is_playing = playing_track['is_playing']
         track.image_url = playing_item['album']['images'][2]['url']
+
+        if current_playback is not None:
+            track.is_shuffle = current_playback['shuffle_state']
+            track.repeat_state = current_playback['repeat_state']
+            
         return track
     
     def play_current_track(self):
         self.spotify.start_playback()
 
     def pause_current_track(self):
-        print(self.spotify.currently_playing())
         self.spotify.pause_playback()
 
     def next_track(self):
@@ -143,8 +149,8 @@ class SpotifyTrack:
 auth_complete_event = threading.Event()
 spotify = SpotifyTrack(auth_complete_event)
 auth_complete_event.wait()
-playing_track = spotify.spotify.currently_playing()
-# print(playing_track)
+playing_track = spotify.spotify.current_playback()
+print(playing_track)
 # print(playing_track.name + "\n" + ', '.join(playing_track.artists))
 # print("\n")
 # print(spotify.currently_playing_progress_ms())

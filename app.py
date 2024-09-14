@@ -2,8 +2,20 @@ import tkinter as tk
 from tkinter import font
 import time
 import threading
-from PIL import Image as img, ImageTk as imgTk, ImageDraw as imgDr
+from PIL import Image as img, ImageTk as imgTk, ImageDraw as imgDr, ImageFont
 from spotifyAPI import SpotifyTrack
+import os, sys
+
+if getattr(sys, 'frozen', False):  # Check if the app is frozen (i.e., running as an .exe)
+    base_path = sys._MEIPASS  # Get the temporary folder where the .exe is located
+else:
+    base_path = os.path.dirname(__file__)  # Get the current directory
+
+# Construct the path to the textures folder
+textures_path = os.path.join(base_path, "Texture")
+
+def texture_path(filename: str):
+    return os.path.join(textures_path, filename)
 
 class MusicPlayer:
     def __init__(self, root: tk.Tk, spotify: SpotifyTrack):
@@ -19,28 +31,34 @@ class MusicPlayer:
         self.track_artists_font_size = 8
         self.slider_pos = (80, 96)
         self.slider_size = (160, 2)
+        self.slider_time_font_size = 8
+        self.slider_duration_pos = (260, 96)
+        self.slider_progress_pos = (60, 96)
 
         self.play_button_pos = (163, 70)
         self.previous_button_pos = (124, 70)
         self.next_button_pos = (202, 70)
         self.shuffle_button_pos = (89, 70)
         self.repeat_button_pos = (232, 70)
+        self.shuffle_button_pos_nw = (80, 63)
+        self.repeat_button_pos_nw = (223, 63)
 
         self.root.geometry(str(self.dimension[0]) + "x" + str(self.dimension[1]))
         self.root.configure(bg="#000000")
         self.track_name_font = font.Font(family="Montserrat", size=self.track_name_font_size, weight="bold")
         self.track_artist_font = font.Font(family="Montserrat", size=self.track_artists_font_size)
+        self.slider_time_font = font.Font(family="Circular Std", size=self.slider_time_font_size)
         
         self.canvas = tk.Canvas(self.root, width=self.dimension[0], height=self.dimension[1], bg="#000000", relief="flat", bd=0, highlightthickness=0)
         self.canvas.pack()
 
         self.track_name = self.canvas.create_text(self.track_name_pos[0], self.track_name_pos[1], anchor="center", text="", font=self.track_name_font, fill="#d1d1d1")
         self.track_artists = self.canvas.create_text(self.track_artists_pos[0], self.track_artists_pos[1], anchor="center", text="", font=self.track_artist_font, fill="#9b9b9b")
-        # name_cover_image = tk.PhotoImage(file="Texture/name_cover.png")
-        # self.canvas.create_image(20, 20, anchor="nw", image=name_cover_image)
 
         self.design_window()
         self.design_slider()
+        self.track_duration_text = self.canvas.create_text(self.slider_duration_pos[0], self.slider_duration_pos[1], anchor="center", text="0:00", font=self.slider_time_font, fill="#9b9b9b")
+        self.track_progress_text = self.canvas.create_text(self.slider_progress_pos[0], self.slider_progress_pos[1], anchor="center", text="0:00", font=self.slider_time_font, fill="#9b9b9b")
 
         # Track currently playing
         self.current_song = None
@@ -48,27 +66,37 @@ class MusicPlayer:
         self.is_paused = False
 
         # Add buttons
-        self.play_icon = tk.PhotoImage(file="Texture/play_icon.png")
-        self.pause_icon = tk.PhotoImage(file="Texture/pause_icon.png")
-        self.play_button = tk.Button(self.root, image=self.play_icon, bg="#000000", activebackground="#000000", relief="flat", borderwidth=0, highlightthickness=0, command=self.play_pause)
+        # self.play_icon = tk.PhotoImage(file="Texture/play_icon.png")
+        # self.pause_icon = tk.PhotoImage(file="Texture/pause_icon.png")
+        self.play_icon = tk.PhotoImage(file=texture_path("play_icon.png"))
+        self.pause_icon = tk.PhotoImage(file=texture_path("pause_icon.png"))
+        self.play_button = tk.Button(self.root, image=self.play_icon, bg="#000000", activebackground="#000000", relief="flat", borderwidth=0, highlightthickness=0, command=None)
         self.play_button.image = self.play_icon
+        self.play_button.bind("<ButtonPress-1>", self.disable_button_effect)
         self.play_button_window = self.canvas.create_window(self.play_button_pos[0], self.play_button_pos[1], window=self.play_button)
 
-        self.previous_icon = tk.PhotoImage(file="Texture/previous_icon.png")
+        self.previous_icon = tk.PhotoImage(file=texture_path("previous_icon.png"))
         self.previous_button = tk.Button(self.root, image=self.previous_icon, bg="#000000", activebackground="#000000", relief="flat", borderwidth=0, highlightthickness=0, command=self.previous_track)
+        self.previous_button.bind("<ButtonPress-1>", self.disable_button_effect)
         self.previous_button_window = self.canvas.create_window(self.previous_button_pos[0], self.previous_button_pos[1], window=self.previous_button)
 
-        self.next_icon = tk.PhotoImage(file="Texture/next_icon.png")
+        self.next_icon = tk.PhotoImage(file=texture_path("next_icon.png"))
         self.next_button = tk.Button(self.root, image=self.next_icon, bg="#000000", activebackground="#000000", relief="flat", borderwidth=0, highlightthickness=0, command=self.next_track)
+        self.next_button.bind("<ButtonPress-1>", self.disable_button_effect)
         self.next_button_window = self.canvas.create_window(self.next_button_pos[0], self.next_button_pos[1], window=self.next_button)
 
-        self.shuffle_icon = tk.PhotoImage(file="Texture/shuffle_icon.png")
+        self.shuffle_icon = tk.PhotoImage(file=texture_path("shuffle_icon.png"))
+        self.shuffle_active_icon = tk.PhotoImage(file=texture_path("shuffle_active_icon.png"))
         self.shuffle_button = tk.Button(self.root, image=self.shuffle_icon, bg="#000000", activebackground="#000000", relief="flat", borderwidth=0, highlightthickness=0, command=self.toggle_shuffle)
-        self.shuffle_button_window = self.canvas.create_window(self.shuffle_button_pos[0], self.shuffle_button_pos[1], window=self.shuffle_button)
+        self.shuffle_button.bind("<ButtonPress-1>", self.disable_button_effect)
+        self.shuffle_button_window = self.canvas.create_window(self.shuffle_button_pos_nw[0], self.shuffle_button_pos_nw[1], anchor="nw", window=self.shuffle_button)
 
-        self.repeat_icon = tk.PhotoImage(file="Texture/repeat_icon.png")
-        self.repeat_button = tk.Button(self.root, image=self.repeat_icon, bg="#000000", activebackground="#000000", relief="flat", borderwidth=0, highlightthickness=0, command=self.update_repeat)
-        self.repeat_button_window = self.canvas.create_window(self.repeat_button_pos[0], self.repeat_button_pos[1], window=self.repeat_button)
+        self.repeat_icon = tk.PhotoImage(file=texture_path("repeat_icon.png"))
+        self.repeat_active_icon = tk.PhotoImage(file=texture_path("repeat_active_icon.png"))
+        self.repeat_active_one_icon = tk.PhotoImage(file=texture_path("repeat_one_active_icon.png"))
+        self.repeat_button = tk.Button(self.root, image=self.repeat_icon, bg="#000000", activebackground="#000000", relief="flat", bd=0, borderwidth=0, highlightthickness=0, command=self.update_repeat)
+        self.repeat_button.bind("<ButtonPress-1>", self.disable_button_effect)
+        self.repeat_button_window = self.canvas.create_window(self.repeat_button_pos_nw[0], self.repeat_button_pos_nw[1], anchor="nw", window=self.repeat_button)
 
         # Update
         self.update_thread = threading.Thread(target=self.update)
@@ -129,7 +157,7 @@ class MusicPlayer:
         self.offset_y = 0
 
     def design_slider(self):                
-        self.slider_image = tk.PhotoImage(file="Texture/slider_bar.png")
+        self.slider_image = tk.PhotoImage(file=texture_path("slider_bar.png"))
     
         pos = self.slider_pos
         self.canvas.create_image(pos[0], pos[1], anchor="nw", image=self.slider_image)
@@ -137,14 +165,9 @@ class MusicPlayer:
         self.fill_handle = self.canvas.create_rectangle(pos[0] + slider_size[1] / 2, pos[1], pos[0] + slider_size[1] / 2, pos[1] + slider_size[1], fill="#ffffff", outline="")
         # self.marker = self.canvas.create_oval(pos[0], pos[1], pos[0] + 4, pos[1] + 4, fill="#ffffff", outline="")
 
-        # Label to show the current value
-        self.value_label = tk.Label(self.root, text="Value: 0")
-        self.value_label.pack(pady=10)
-
-    def update_play_button(self):
+    def disable_button_effect(self, event):
         return
-        
-
+    
     def play_pause(self):
         if self.is_paused:
             self.spotify.play_current_track()
@@ -189,7 +212,6 @@ class MusicPlayer:
             if playing_track is None:
                 continue
 
-
             # update track name and artists
             if not playing_track.name == self.current_song:
                 self.current_song = playing_track.name
@@ -208,8 +230,12 @@ class MusicPlayer:
             slider_pos = self.slider_pos
             slider_size = self.slider_size
             self.canvas.coords(self.fill_handle, slider_pos[0] + slider_size[1] / 2, slider_pos[1], slider_pos[0] + fill, slider_pos[1] + slider_size[1])
+            self.canvas.itemconfig(self.track_duration_text, text=playing_track.duration_in_min_sec())
+            self.canvas.itemconfig(self.track_progress_text, text=playing_track.progress_in_min_sec())
 
-            # update play button
+            # update buttons
+            self.update_shuffle_button(playing_track.is_shuffle)
+            self.update_repeat_button(playing_track.repeat_state)
             self.update_play_button(playing_track.is_playing)
             self.is_paused = not playing_track.is_playing
             
@@ -224,6 +250,25 @@ class MusicPlayer:
             self.is_paused = False
             self.play_button.config(image=self.play_icon)
             self.play_button.image = self.play_icon
+    
+    def update_shuffle_button(self, is_shuffling: bool):
+        if is_shuffling:
+            self.shuffle_button.config(image=self.shuffle_active_icon)
+            self.shuffle_button.image = self.shuffle_active_icon
+        else:
+            self.shuffle_button.config(image=self.shuffle_icon)
+            self.shuffle_button.image = self.shuffle_icon
+    
+    def update_repeat_button(self, repeat_state: str):
+        if repeat_state == 'off':
+            self.repeat_button.config(image=self.repeat_icon)
+            self.repeat_button.image = self.repeat_icon
+        elif repeat_state == 'track':
+            self.repeat_button.config(image=self.repeat_active_one_icon)
+            self.repeat_button.image = self.repeat_active_one_icon
+        elif repeat_state == 'context':
+            self.repeat_button.config(image=self.repeat_active_icon)
+            self.repeat_button.image = self.repeat_active_icon
 
     def slide_music(self, val):
         x = 1
@@ -252,9 +297,6 @@ if __name__ == "__main__":
 
     app = MusicPlayer(root, spotify)
     app.root.attributes("-topmost", True)
-    
-
-    
     
     root.mainloop()
 
